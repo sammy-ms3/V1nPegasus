@@ -41,7 +41,7 @@
         .container {
             width: 100%;
             max-width: 600px;
-            padding: 20px;
+            padding: 20px 1cm;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -227,12 +227,42 @@
             transform: scale(1.1);
         }
 
+        .btn-translate {
+            background: #E8F5E9;
+            color: #2E7D32;
+            border: 1px solid #A5D6A7;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: var(--transition);
+            margin-top: 8px;
+            font-weight: 500;
+            display: inline-block;
+        }
+
+        .btn-translate:hover {
+            background: var(--primary-btn);
+            transform: translateY(-1px);
+        }
+
+        .example-translation {
+            margin-top: 10px;
+            font-size: 0.95rem;
+            color: #5D4037;
+            border-top: 1px dashed #E0E0E0;
+            padding-top: 8px;
+            line-height: 1.5;
+            display: none;
+        }
+
         .search-container {
             display: flex;
             width: 100%;
+            max-width: 450px; /* 設定搜尋列最大寬度，避免過長 */
             gap: 10px;
-            margin-bottom: 15px;
-            margin-top: 10px;
+            margin: 10px auto 15px auto; /* 自動邊距實作水平置中 */
+            justify-content: center;
         }
 
         .search-input {
@@ -276,8 +306,7 @@
             justify-content: space-between;
             width: 100%;
             gap: 20px;
-            margin-top: 0;
-            margin-bottom: 30px;
+            margin: 0 0 30px 0;
         }
 
         .btn-nav {
@@ -402,11 +431,12 @@
                         </button>
                         <div class="translation" id="transText"></div>
                     </div>
-                    <div class="example-container">
                         <div class="example" id="exampleText"></div>
                         <button class="btn-voice-mini" id="btnVoiceExample" title="聽例句朗讀">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
                         </button>
+                        <button class="btn-translate" id="btnTranslate">翻譯</button>
+                        <div class="example-translation" id="exampleTransText"></div>
                     </div>
                 </div>
                 <div class="hint-text" id="hint">點擊卡片顯示解釋</div>
@@ -499,6 +529,8 @@
         const hint = document.getElementById('hint');
         const btnVoice = document.getElementById('btnVoice');
         const btnStar = document.getElementById('btnStar');
+        const btnTranslate = document.getElementById('btnTranslate');
+        const exampleTransText = document.getElementById('exampleTransText');
 
         function updateDisplayOrder() {
             if (currentMode === MODE_SEQ) {
@@ -579,6 +611,13 @@
                 isRevealed = false;
                 detailsArea.classList.remove('show');
                 hint.style.opacity = '1';
+
+                // 重置翻譯狀態
+                if (typeof btnTranslate !== 'undefined') btnTranslate.style.display = 'inline-block';
+                if (typeof exampleTransText !== 'undefined') {
+                    exampleTransText.style.display = 'none';
+                    exampleTransText.innerText = '';
+                }
                 return;
             }
             
@@ -595,6 +634,13 @@
                 isRevealed = false;
                 detailsArea.classList.remove('show');
                 hint.style.opacity = '1';
+
+                // 重置翻譯狀態
+                if (typeof btnTranslate !== 'undefined') btnTranslate.style.display = 'inline-block';
+                if (typeof exampleTransText !== 'undefined') {
+                    exampleTransText.style.display = 'none';
+                    exampleTransText.innerText = '';
+                }
                 
                 progressText.innerText = (currentIndex + 1) + " / " + displayOrder.length;
                 btnPrev.disabled = currentIndex === 0;
@@ -704,6 +750,47 @@
                 window.speechSynthesis.cancel();
                 window.speechSynthesis.speak(utter);
             }
+        });
+
+        // 例句翻譯功能
+        async function translateExample() {
+            if (!navigator.onLine) return; // 沒有網路時完全無動作
+            
+            const text = exampleText.innerText;
+            if (!text) return;
+
+            btnTranslate.innerText = '翻譯中...';
+            btnTranslate.disabled = true;
+
+            try {
+                // 使用 Google Translate 公開 API
+                const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=${encodeURIComponent(text)}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                let translation = '';
+                if (data && data[0]) {
+                    data[0].forEach(item => {
+                        if (item[0]) translation += item[0];
+                    });
+                }
+
+                if (translation) {
+                    exampleTransText.innerText = translation;
+                    exampleTransText.style.display = 'block';
+                    btnTranslate.style.display = 'none'; // 翻譯完按鈕消失
+                }
+            } catch (error) {
+                console.error('Translation error:', error);
+            } finally {
+                btnTranslate.innerText = '翻譯';
+                btnTranslate.disabled = false;
+            }
+        }
+
+        btnTranslate.addEventListener('click', (e) => {
+            e.stopPropagation();
+            translateExample();
         });
 
         // 搜尋功能邏輯
