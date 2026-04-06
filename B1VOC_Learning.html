@@ -274,7 +274,7 @@
 
         .nav-controls {
             display: flex;
-            justify-content: center; /* 靠攏置中 */
+            justify-content: space-between;
             width: 100%;
             gap: 15px;
             margin-top: 0;
@@ -282,7 +282,7 @@
         }
 
         .btn-nav {
-            flex: none; /* 不再填滿寬度 */
+            flex: 1; /* 填滿寬度 */
             min-width: 130px;
             padding: 16px 24px;
             border: none;
@@ -326,7 +326,8 @@
             font-weight: 500;
             cursor: pointer;
             transition: var(--transition);
-            margin-top: 10px;
+            margin: 10px auto 0;
+            display: block;
             opacity: 0.8;
         }
 
@@ -385,6 +386,9 @@
 
         .btn-translate {
             margin-top: 10px;
+            margin-left: auto;
+            margin-right: 0;
+            width: fit-content;
             padding: 8px 16px;
             background: white;
             border: 1px solid var(--primary-btn);
@@ -451,8 +455,8 @@
                         </button>
                     </div>
                     <button class="btn-translate" id="btnTranslate">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"></path><path d="M4 14l6-6 2-3"></path><path d="M2 5h12"></path><path d="M7 2h1"></path><path d="M22 22l-5-10-5 10"></path><path d="M14 18h6"></path></svg>
-                        翻譯例句
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+                        <span>翻譯例句</span>
                     </button>
                     <div class="example-translation" id="exampleTransArea"></div>
                 </div>
@@ -546,6 +550,8 @@
         const hint = document.getElementById('hint');
         const btnVoice = document.getElementById('btnVoice');
         const btnStar = document.getElementById('btnStar');
+        const btnTranslate = document.getElementById('btnTranslate');
+        const exampleTransArea = document.getElementById('exampleTransArea');
 
         function updateDisplayOrder() {
             if (currentMode === MODE_SEQ) {
@@ -623,8 +629,12 @@
                     btnStar.classList.remove('active');
                 }
 
-                // 重置翻譯按鈕與內容
+                // 重置翻譯按鈕與顯示區域
                 btnTranslate.style.display = 'flex';
+                btnTranslate.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"></path><path d="M4 14l6-6 2-3"></path><path d="M2 5h12"></path><path d="M7 2h1"></path><path d="M22 22l-5-10-5 10"></path><path d="M14 18h6"></path></svg>
+                    翻譯例句
+                `;
                 exampleTransArea.style.display = 'none';
                 exampleTransArea.innerText = '';
 
