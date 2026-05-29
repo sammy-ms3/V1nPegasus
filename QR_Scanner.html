@@ -165,7 +165,7 @@
     .rec-chevron { font-size: 16px; color: var(--t3); flex-shrink: 0; transition: transform .25s cubic-bezier(0.4, 0, 0.2, 1); }
     .rec-body { max-height: 0; overflow: hidden; transition: max-height .28s cubic-bezier(0.4, 0, 0.2, 1); }
     .rec-body-inner { padding: 0 16px 16px; }
-    .rec-card.open .rec-body { max-height: 680px; }
+    .rec-card.open .rec-body { max-height: 2400px; }
     .rec-card.open .rec-chevron { transform: rotate(180deg); }
     .detail-card {
       padding: 14px; border: 1px solid rgba(255,255,255,0.15); border-top: 1px solid rgba(255,255,255,0.24);
@@ -177,6 +177,21 @@
     .detail-label { color: var(--t2); font-size: 13px; }
     .detail-value { word-break: break-word; font-size: 14px; color: #fff; }
     .detail-value.pre-wrap { white-space: pre-wrap; }
+    /* Audit history timeline */
+    .audit-history-wrap { margin-top: 12px; }
+    .audit-history-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--t2); margin-bottom: 8px; padding: 0 2px; }
+    .audit-history { display: grid; gap: 6px; }
+    .audit-entry { display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(239,159,39,.07); border: 1px solid rgba(239,159,39,.18); border-left: 3px solid rgba(239,159,39,.45); }
+    .audit-ts { flex-shrink: 0; }
+    .audit-date { display: block; font-size: 10px; color: var(--t3); letter-spacing: .4px; white-space: nowrap; }
+    .audit-time { display: block; font-size: 13px; font-weight: 700; color: var(--accent-light); white-space: nowrap; }
+    .audit-changes { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1; }
+    .audit-field { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 12px; }
+    .audit-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--accent); font-weight: 700; flex-shrink: 0; min-width: 48px; }
+    .audit-arrow { color: var(--t3); font-size: 11px; }
+    .audit-val-from { color: var(--t3); font-size: 12px; }
+    .audit-val-to { color: #fff; font-weight: 600; font-size: 12px; }
+    .audit-empty { color: var(--t2); font-size: 13px; padding: 4px 0; }
     .history-list { display: grid; gap: 10px; margin-top: 14px; }
     .history-item { display: block; padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.11); color: #fff; }
     .history-card { margin-bottom: 0; }
@@ -538,22 +553,65 @@
       </section>`;
 
       html += FIELD_GROUPS.map((g, i) => {
-        const rows = g.fields.map(f => `
+        const mainFields = g.fields.filter(f => f !== 'History');
+        const hasHistory = g.fields.includes('History');
+        const rows = mainFields.map(f => `
           <div class="detail-row">
             <div class="detail-label">${escapeHTML(f)}</div>
-            <div class="detail-value ${f === 'History' ? 'pre-wrap' : ''}">${escapeHTML(r[f] || '-')}</div>
+            <div class="detail-value">${escapeHTML(r[f] || '-')}</div>
           </div>
         `).join('');
+        const historyBlock = hasHistory ? `
+          <div class="audit-history-wrap">
+            <div class="audit-history-section-label">History</div>
+            <div class="audit-history">${renderAuditHistory(r['History'])}</div>
+          </div>
+        ` : '';
+        const inner = (rows ? `<div class="detail-card">${rows}</div>` : '') + historyBlock;
         return `<section class="rec-card ${i === 0 ? 'open' : ''}">
           <div class="rec-head" onclick="this.parentElement.classList.toggle('open')">
             <div class="rec-icon ${g.accent}"><i class="ti ${g.icon}"></i></div>
             <div class="rec-meta"><div class="rec-title">${g.title}</div><div class="rec-subtitle">${g.subtitle}</div></div>
             <i class="ti ti-chevron-down rec-chevron"></i>
           </div>
-          <div class="rec-body"><div class="rec-body-inner"><div class="detail-card">${rows}</div></div></div>
+          <div class="rec-body"><div class="rec-body-inner">${inner}</div></div>
         </section>`;
       }).join('');
       container.innerHTML = html;
+    }
+
+    function parseAuditHistory(raw) {
+      if (!raw || raw === '-') return [];
+      const entries = raw.split(/(?=\[\d{4}-\d{2}-\d{2})/).filter(s => s.trim());
+      return entries.map(entry => {
+        const tsMatch = entry.match(/\[(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\]/);
+        if (!tsMatch) return null;
+        const iurMatch = entry.match(/IUR Status:\s*(.*?)\s*->\s*(.*?);/);
+        const trMatch  = entry.match(/Transfer (?:Status|State):\s*(.*?)\s*->\s*(.*?);/);
+        if (!iurMatch && !trMatch) return null;
+        return {
+          date: tsMatch[1], time: tsMatch[2],
+          iur:      iurMatch ? { from: iurMatch[1].trim(), to: iurMatch[2].trim() } : null,
+          transfer: trMatch  ? { from: trMatch[1].trim(),  to: trMatch[2].trim()  } : null
+        };
+      }).filter(Boolean);
+    }
+
+    function renderAuditHistory(raw) {
+      const entries = parseAuditHistory(raw);
+      if (!entries.length) return '<div class="audit-empty">No status changes recorded.</div>';
+      return entries.map(e => {
+        const parts = [];
+        if (e.iur) {
+          const from = e.iur.from ? `<span class="audit-val-from">${escapeHTML(e.iur.from)}</span><span class="audit-arrow"> → </span>` : '';
+          parts.push(`<div class="audit-field"><span class="audit-field-label">IUR</span>${from}<span class="audit-val-to">${escapeHTML(e.iur.to)}</span></div>`);
+        }
+        if (e.transfer) {
+          const from = e.transfer.from ? `<span class="audit-val-from">${escapeHTML(e.transfer.from)}</span><span class="audit-arrow"> → </span>` : '';
+          parts.push(`<div class="audit-field"><span class="audit-field-label">Transfer</span>${from}<span class="audit-val-to">${escapeHTML(e.transfer.to)}</span></div>`);
+        }
+        return `<div class="audit-entry"><div class="audit-ts"><span class="audit-date">${escapeHTML(e.date)}</span><span class="audit-time">${escapeHTML(e.time)}</span></div><div class="audit-changes">${parts.join('')}</div></div>`;
+      }).join('');
     }
 
     function buildTile(l, v, sv, a) {
