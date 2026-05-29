@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="format-detection" content="telephone=no, date=no, email=no, address=no">
-  <title>QR Scanner & Camera</title>
+  <title>QR Scanner</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -268,16 +268,20 @@
   </div>
 
   <script>
-    // ─── GAS API Configuration ────────────────────────────────────────────────
-    // Paste your GAS Web App /exec URL here.
-    // This file should be opened directly in a browser (local file / GitHub Pages),
-    // NOT served through GAS HtmlService, to allow camera access.
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ARCHITECTURE
+    //   Frontend : QR_Scanner.html  — hosted on GitHub Pages (this file)
+    //              Camera access works because GitHub Pages is a proper HTTPS origin.
+    //   Backend  : Code.gs          — Google Apps Script, JSONP API only
+    //              Endpoint: GAS_API_URL below
+    //
+    // JSONP is used instead of fetch() to avoid CORS restrictions when calling
+    // across origins. Code.gs supports ?action=...&callback=... via buildApiOutput_().
+    //
+    // TO UPDATE BACKEND URL: Replace GAS_API_URL with your new /exec deployment URL.
+    // ═══════════════════════════════════════════════════════════════════════════
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyJ5TvC_r4PCb0g0xuWeAlRfTS0xy9Ojoe0ngtfNBdHwrFVfoa11cu1JviA55a3OCtC0A/exec';
 
-    /**
-     * JSONP helper — avoids CORS and works from any origin (file://, GitHub Pages, etc.)
-     * GAS Code.gs already supports ?action=...&callback=... via buildApiOutput_()
-     */
     function jsonpFetch(action, params) {
       return new Promise((resolve, reject) => {
         const cbName = '_cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
@@ -293,7 +297,7 @@
         const qs = new URLSearchParams(Object.assign({}, params, { action: action, callback: cbName }));
         const script = document.createElement('script');
         script.src = GAS_API_URL + '?' + qs.toString();
-        script.onerror = () => { if (!done) { clearTimeout(timer); cleanup(); reject(new Error('Network error or JSONP blocked.')); } };
+        script.onerror = () => { if (!done) { clearTimeout(timer); cleanup(); reject(new Error('Network error. Check GAS_API_URL or GAS deployment.')); } };
         document.head.appendChild(script);
       });
     }
@@ -331,7 +335,7 @@
 
       jsonpFetch('bootstrap')
         .then(b => { state.bootstrap = b; renderHistory(); setStatus(buildReadyMessage(b)); })
-        .catch(err => setStatus(err.message || 'Error loading state.'));
+        .catch(err => setStatus('Backend error: ' + err.message));
     }
 
     async function startCamera() {
@@ -410,10 +414,10 @@
       const title = document.getElementById('cameraLauncherTitle');
       if (title) title.textContent = 'Camera blocked';
       const sub = document.getElementById('cameraLauncherSubtitle');
-      if (sub) sub.textContent = 'Open this URL in Chrome or Safari \u2192 tap the address bar lock icon \u2192 Site settings \u2192 Camera \u2192 Allow (for script.googleusercontent.com). Then tap Retry.';
+      if (sub) sub.textContent = 'Tap the address bar \u2192 lock / info icon \u2192 Site settings \u2192 Camera \u2192 Allow. Then tap Retry.';
       const btn = document.getElementById('cameraButton');
       if (btn) btn.innerHTML = '<i class="ti ti-refresh"></i><span>Retry</span>';
-      setStatus('[NotAllowedError] Camera permission denied. Allow camera for this URL in browser site settings, then tap Retry.');
+      setStatus('Camera permission denied. Allow camera access in browser site settings, then tap Retry.');
     }
 
     async function stopCamera() {
@@ -493,6 +497,11 @@
         .catch(err => { state.isLookingUp = false; setStatus(err.message || 'Lookup failed.'); });
     }
 
+    function copyCurrentSN() {
+      const sn = document.getElementById('resultSN').textContent;
+      if (sn && sn !== '-') navigator.clipboard.writeText(sn).catch(() => {});
+    }
+
     function renderRecord(r) {
       document.getElementById('resultSN').textContent = r.SN || '-';
       const container = document.getElementById('statusTags');
@@ -552,7 +561,7 @@
       container.innerHTML = h.map(item => `
         <div class="history-item">
           <div class="history-item-head"><div class="history-sn">${escapeHTML(item.sn)}</div><div class="history-time">${new Date(item.t).toLocaleString()}</div></div>
-          <button class="ghost-button" onclick="document.getElementById('manualSN').value='${item.sn}'; lookupFromInput();">Reuse</button>
+          <button class="ghost-button" onclick="document.getElementById('manualSN').value='${escapeHTML(item.sn)}'; lookupFromInput();">Reuse</button>
         </div>
       `).join('');
     }
@@ -562,8 +571,8 @@
     function setStatus(m) { document.getElementById('scannerStatus').textContent = m; }
     function isValidSN(s) { return /^[A-Z0-9]{6,20}$/i.test(normalizeSN(s)); }
     function normalizeSN(s) { return String(s || '').trim().toUpperCase(); }
-    function escapeHTML(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-    function buildReadyMessage(b) { return b?.spreadsheetConfigured ? 'Ready to lookup.' : 'Spreadsheet not configured.'; }
+    function escapeHTML(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function buildReadyMessage(b) { return b?.spreadsheetConfigured ? 'Ready. Start camera or enter SN manually.' : 'Warning: Spreadsheet not configured in GAS.'; }
   </script>
 </body>
 </html>
