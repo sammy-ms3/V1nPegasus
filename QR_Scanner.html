@@ -282,24 +282,26 @@
     // ═══════════════════════════════════════════════════════════════════════════
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzYXvp9N-h8gxjFwHeOqQYxV3gXsu74k6d84qXMgJSKGReslQHgCxlgvnUMBwTA0IvQog/exec';
 
-    function jsonpFetch(action, params) {
-      return new Promise((resolve, reject) => {
-        const cbName = '_cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-        let done = false;
-        const cleanup = () => { done = true; delete window[cbName]; if (script.parentNode) script.remove(); };
-        const timer = setTimeout(() => { cleanup(); reject(new Error('Request timed out.')); }, 20000);
-        window[cbName] = (resp) => {
-          clearTimeout(timer);
-          cleanup();
-          if (resp && resp.ok) resolve(resp.data);
-          else reject(new Error((resp && resp.error) || 'API error'));
-        };
-        const qs = new URLSearchParams(Object.assign({}, params, { action: action, callback: cbName }));
-        const script = document.createElement('script');
-        script.src = GAS_API_URL + '?' + qs.toString();
-        script.onerror = () => { if (!done) { clearTimeout(timer); cleanup(); reject(new Error('Network error. Check GAS_API_URL or GAS deployment.')); } };
-        document.head.appendChild(script);
-      });
+    function apiFetch(action, params) {
+      const qs = new URLSearchParams(Object.assign({}, params, { action: action }));
+      return fetch(GAS_API_URL + '?' + qs.toString())
+        .then(res => {
+          if (!res.ok) throw new Error('HTTP ' + res.status + '. Check GAS deployment URL.');
+          return res.json();
+        })
+        .then(resp => {
+          if (resp && resp.ok) return resp.data;
+          throw new Error((resp && resp.error) || 'API returned an error.');
+        })
+        .catch(err => {
+          if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+            throw new Error(
+              'CORS / network error. In GAS editor: Deploy \u2192 Manage deployments \u2192 ' +
+              'set "Who has access" to "Anyone" (not "Anyone with Google account"), then create a new deployment.'
+            );
+          }
+          throw err;
+        });
     }
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -333,7 +335,7 @@
       document.getElementById('torchButton').addEventListener('click', toggleTorch);
       document.getElementById('manualSN').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookupFromInput(); });
 
-      jsonpFetch('bootstrap')
+      apiFetch('bootstrap')
         .then(b => { state.bootstrap = b; renderHistory(); setStatus(buildReadyMessage(b)); })
         .catch(err => setStatus('Backend error: ' + err.message));
     }
@@ -358,13 +360,24 @@
 
         await state.html5QrCode.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: (vw) => ({ width: Math.min(vw * 0.8, 300), height: 150 }) },
+          {
+            fps: 15,
+            // Wide + short scan zone: optimised for Code 128 / Code 39 horizontal barcodes.
+            // vw = viewfinder element width (px). Keep 92% width and ~22% height.
+            qrbox: (vw, vh) => ({
+              width:  Math.round(vw * 0.92),
+              height: Math.round(Math.min(vw * 0.22, 90))
+            })
+          },
           (text) => {
-            if (isValidSN(text)) {
-              const sn = normalizeSN(text);
+            const sn = extractSN(text);
+            if (sn) {
               document.getElementById('manualSN').value = sn;
               stopCamera();
               lookupBySN(sn);
+            } else {
+              // Show raw scanned value so user can diagnose mismatches
+              setStatus('Scanned: "' + text.slice(0, 50) + (text.length > 50 ? '\u2026' : '') + '" — not a valid SN format');
             }
           }
         );
@@ -485,7 +498,7 @@
       const nSn = normalizeSN(sn);
       state.isLookingUp = true;
       setStatus('Looking up ' + nSn + '...');
-      jsonpFetch('lookup', { sn: nSn })
+      apiFetch('lookup', { sn: nSn })
         .then(record => {
           state.isLookingUp = false;
           if (!record) { setStatus('No record found for ' + nSn); return; }
@@ -569,8 +582,23 @@
     function clearHistory() { sessionStorage.removeItem('h'); renderHistory(); }
     function resetScanner() { document.getElementById('resultView').hidden = true; document.getElementById('scannerView').classList.remove('hidden'); document.getElementById('resetButton').hidden = true; }
     function setStatus(m) { document.getElementById('scannerStatus').textContent = m; }
-    function isValidSN(s) { return /^[A-Z0-9]{6,20}$/i.test(normalizeSN(s)); }
-    function normalizeSN(s) { return String(s || '').trim().toUpperCase(); }
+    function isValidSN(s)   { return /^[A-Z0-9]{6,20}$/.test(normalizeSN(s)); }
+    function normalizeSN(s)  { return String(s || '').trim().toUpperCase(); }
+
+    // Extract an SN from raw barcode text, handling common label prefixes.
+    // e.g. "S/N:5CG61246NH", "SN: 00057712V6", or plain "5CG61246NH".
+    function extractSN(text) {
+      const t = normalizeSN(text);
+      if (isValidSN(t)) return t;                                  // exact match
+      const prefixed = t.match(/S\/?N[:\s]+([A-Z0-9]{6,20})(?:\s|$)/);
+      if (prefixed) return prefixed[1];                            // e.g. S/N:XXXXX
+      const segments = t.match(/[A-Z0-9]{6,20}/g);
+      if (segments) {
+        const snLike = segments.filter(m => m.length >= 8 && m.length <= 15);
+        return snLike.length ? snLike[0] : segments[0];           // longest plausible SN
+      }
+      return null;
+    }
     function escapeHTML(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     function buildReadyMessage(b) { return b?.spreadsheetConfigured ? 'Ready. Start camera or enter SN manually.' : 'Warning: Spreadsheet not configured in GAS.'; }
   </script>
