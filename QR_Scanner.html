@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no, date=no, email=no, address=no">
+  <title>QR Scanner & Camera</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    :root {
+      --accent: #a3d95d;
+      --accent-light: #d4f0a0;
+      --bg: #060910;
+      --glass: rgba(255,255,255,0.07);
+      --glass-border: rgba(255,255,255,0.14);
+      --glass-hi: rgba(255,255,255,0.13);
+      --row-div: rgba(255,255,255,0.07);
+      --t1: #ffffff;
+      --t2: rgba(255,255,255,0.55);
+      --t3: rgba(255,255,255,0.28);
+      --shadow-raise:
+        0 2px 0 rgba(255,255,255,.10),
+        0 -1px 0 rgba(0,0,0,.25),
+        inset 0 1px 0 rgba(255,255,255,.18),
+        inset 0 -1px 0 rgba(0,0,0,.20),
+        0 12px 36px rgba(0,0,0,.38),
+        0 4px 12px rgba(0,0,0,.22);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; background: var(--bg); }
+    body {
+      min-height: 100%;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--t1);
+      -webkit-font-smoothing: antialiased;
+      background: var(--bg);
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 55% at 5% 0%, rgba(99,153,34,.30) 0%, transparent 60%),
+        radial-gradient(ellipse 65% 55% at 92% 32%, rgba(55,138,221,.22) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 60% at 18% 90%, rgba(127,119,221,.22) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 60% 60%, rgba(163,217,93,.08) 0%, transparent 70%),
+        var(--bg);
+      pointer-events: none;
+    }
+    .app-shell {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: max(env(safe-area-inset-top), 16px) 16px max(env(safe-area-inset-bottom), 40px);
+    }
+    .page-header, .result-header, .history-header, .section-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .page-header { margin-bottom: 18px; }
+    .eyebrow { color: var(--t2); letter-spacing: 1.2px; text-transform: uppercase; font-size: 11px; }
+    .hdr-card, .glass-card {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-top: 1px solid rgba(255,255,255,0.26);
+      border-radius: 22px;
+      box-shadow: var(--shadow-raise);
+      backdrop-filter: blur(14px);
+    }
+    .hdr-card { padding: 20px 22px 18px; }
+    .hdr-eyebrow { margin-bottom: 4px; }
+    .hdr-title { font-size: 28px; font-weight: 700; letter-spacing: -.5px; color: #fff; text-shadow: 0 0 18px rgba(163,217,93,.45), 0 1px 0 rgba(0,0,0,.4); }
+    h2 { font-size: 20px; color: #fff; }
+    h3 { font-size: 15px; color: #fff; }
+    .hdr-btn {
+      width: 46px; height: 46px; border-radius: 14px; background: rgba(99,153,34,.22); border: 1px solid rgba(99,153,34,.40); border-top-color: rgba(163,217,93,.35);
+      display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--accent-light);
+      box-shadow: 0 4px 12px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.15);
+    }
+    main { display: grid; gap: 14px; }
+    .panel { padding: 18px; }
+    .section-heading { align-items: flex-start; margin-bottom: 14px; }
+    .camera-shell { display: grid; gap: 12px; }
+    .camera-launcher { display: grid; gap: 14px; padding: 18px; border-radius: 18px; }
+    .camera-launcher-icon {
+      width: 48px; height: 48px; border-radius: 15px; display: flex; align-items: center; justify-content: center;
+      font-size: 24px; color: var(--accent-light); background: rgba(99,153,34,.16); border: 1px solid rgba(99,153,34,.32);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
+    }
+    .camera-launcher-title { color: #fff; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .camera-launcher-subtitle { color: var(--t2); font-size: 13px; line-height: 1.5; }
+    .camera-launch-button { justify-self: stretch; }
+    .camera-shell.active .camera-launcher { display: none; }
+    .camera-shell.idle .video-frame { display: none; }
+    .video-frame {
+      position: relative; width: 100%; aspect-ratio: 4 / 5; overflow: hidden; border-radius: 18px; background: #1c232b; border: 1px solid rgba(255,255,255,.12);
+    }
+    #reader { width: 100%; height: 100%; background: #10161f; }
+    #reader video { width: 100% !important; height: 100% !important; object-fit: cover !important; background: #10161f; }
+    #reader__dashboard, #reader__header_message { display: none !important; }
+    .scan-overlay { position: absolute; inset: 18px; border: 2px solid rgba(255, 255, 255, 0.74); border-radius: 18px; pointer-events: none; }
+    .scan-line {
+      position: absolute; left: 10px; right: 10px; top: 12%; height: 2px;
+      background: linear-gradient(90deg, transparent, #fff, transparent);
+      box-shadow: 0 0 14px rgba(255, 255, 255, 0.85); animation: sweep 2.2s infinite ease-in-out;
+    }
+    @keyframes sweep { 0% { transform: translateY(0); } 50% { transform: translateY(300px); } 100% { transform: translateY(0); } }
+    .status-text { margin: 14px 0 0; font-size: 14px; line-height: 1.5; }
+    .msg-box { padding: 15px 16px; border-radius: 14px; background: rgba(99,153,34,.14); border: 1px solid rgba(99,153,34,.28); color: #c0dd97; }
+    .manual-row, .actions-row { display: grid; gap: 10px; margin-top: 14px; }
+    .manual-row { grid-template-columns: 1fr 110px; }
+    .actions-row { grid-template-columns: 1fr; }
+    input, button, textarea, select { font: inherit; }
+    .glass-input {
+      width: 100%; border-radius: 16px; border: 1px solid rgba(255,255,255,0.16); border-top: 1px solid rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.08); padding: 14px 16px; color: #fff; outline: none;
+    }
+    .glass-input::placeholder { color: var(--t3); }
+    button { border: none; cursor: pointer; transition: transform .16s ease, opacity .16s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    button:active { transform: scale(0.98); }
+    .ghost-button {
+      padding: 14px 16px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+      border-top-color: rgba(255,255,255,.18); color: var(--t1); box-shadow: 0 4px 16px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .submit-btn {
+      width: 100%; padding: 14px 16px; background: linear-gradient(135deg, #b8e86a 0%, #1dbf8f 100%); border-radius: 16px;
+      font-size: 16px; font-weight: 700; color: #071a07;
+      box-shadow: 0 8px 28px rgba(130,210,80,.35), 0 2px 0 rgba(255,255,255,.20), inset 0 1px 0 rgba(255,255,255,.30), inset 0 -2px 0 rgba(0,0,0,.12);
+    }
+    .status-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 18px; }
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px;
+      background: rgba(29,158,117,.18); color: #5dcaa5; font-size: 13px; font-weight: 600;
+    }
+    .badge { font-size: 11px; padding: 5px 10px; border-radius: 20px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+    .b-card { background: rgba(55,138,221,.18); color: #85b7eb; }
+    .detail-groups { display: grid; gap: 12px; }
+    .glass-card-light { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.11); border-radius: 14px; }
+    .glass-accent-green { background: rgba(99,153,34,.12); border: 1px solid rgba(99,153,34,.25); border-top-color: rgba(163,217,93,.30); box-shadow: inset 0 1px 0 rgba(255,255,255,.10); }
+    .glass-accent-purple { background: rgba(168,85,247,.10); border: 1px solid rgba(168,85,247,.25); }
+    .glass-accent-amber { background: rgba(239,159,39,.12); border: 1px solid rgba(239,159,39,.30); }
+    .detail-summary-card { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .summary-tile { padding: 12px 14px; min-height: 84px; }
+    .summary-label { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--t2); margin-bottom: 6px; }
+    .summary-value { font-size: 16px; font-weight: 700; color: #fff; line-height: 1.25; word-break: break-word; }
+    .summary-subvalue { margin-top: 6px; color: var(--t2); font-size: 12px; }
+    .rec-card {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-top: 1px solid rgba(255,255,255,0.24);
+      border-radius: 18px; margin-bottom: 11px; box-shadow: var(--shadow-raise); overflow: hidden;
+    }
+    .rec-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+    .rec-icon { width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px; }
+    .rec-meta { flex: 1; min-width: 0; }
+    .rec-title { color: #fff; font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+    .rec-subtitle { color: var(--t2); font-size: 12px; line-height: 1.4; word-break: break-word; }
+    .rec-chevron { font-size: 16px; color: var(--t3); flex-shrink: 0; transition: transform .25s cubic-bezier(0.4, 0, 0.2, 1); }
+    .rec-body { max-height: 0; overflow: hidden; transition: max-height .28s cubic-bezier(0.4, 0, 0.2, 1); }
+    .rec-body-inner { padding: 0 16px 16px; }
+    .rec-card.open .rec-body { max-height: 680px; }
+    .rec-card.open .rec-chevron { transform: rotate(180deg); }
+    .detail-card {
+      padding: 14px; border: 1px solid rgba(255,255,255,0.15); border-top: 1px solid rgba(255,255,255,0.24);
+      border-radius: 18px; background: rgba(255,255,255,0.06); box-shadow: var(--shadow-raise);
+    }
+    .detail-card h3 { margin-bottom: 10px; font-size: 16px; }
+    .detail-row { display: grid; grid-template-columns: 120px 1fr; gap: 8px; padding: 6px 0; border-top: 1px solid var(--row-div); }
+    .detail-row:first-of-type { border-top: 0; padding-top: 0; }
+    .detail-label { color: var(--t2); font-size: 13px; }
+    .detail-value { word-break: break-word; font-size: 14px; color: #fff; }
+    .detail-value.pre-wrap { white-space: pre-wrap; }
+    .history-list { display: grid; gap: 10px; margin-top: 14px; }
+    .history-item { display: block; padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.11); color: #fff; }
+    .history-card { margin-bottom: 0; }
+    .history-item-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .history-sn { font-size: 15px; font-weight: 700; color: #fff; }
+    .history-time { font-size: 12px; color: var(--t2); }
+    .history-actions { margin-top: 12px; display: flex; justify-content: flex-end; }
+    .history-item button { padding: 8px 10px; }
+    .empty-state { color: var(--t2); text-align: center; padding: 24px 10px 10px; }
+    .hidden { display: none !important; }
+    @media (min-width: 640px) { .actions-row { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 420px) { .detail-summary-card { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div id="wrap" class="app-shell">
+    <header class="page-header hdr-card">
+      <div>
+        <p class="eyebrow hdr-eyebrow">Warehouse Lookup</p>
+        <h1 class="hdr-title">Scan SN</h1>
+      </div>
+      <button id="resetButton" class="hdr-btn" hidden><i class="ti ti-rotate-clockwise-2"></i></button>
+    </header>
+
+    <main>
+      <section id="scannerView" class="panel scanner-panel glass-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Live Camera</p>
+            <h2>Start scan or enter SN</h2>
+          </div>
+          <span class="badge b-card"><i class="ti ti-scan"></i> SN lookup</span>
+        </div>
+
+        <div id="cameraShell" class="camera-shell idle">
+          <!-- Launcher State -->
+          <div id="cameraLauncher" class="camera-launcher glass-card-light">
+            <div id="cameraLauncherIcon" class="camera-launcher-icon"><i class="ti ti-camera-search"></i></div>
+            <div class="camera-launcher-copy">
+              <div id="cameraLauncherTitle" class="camera-launcher-title">Live scanner</div>
+              <div id="cameraLauncherSubtitle" class="camera-launcher-subtitle">Scan QR code or barcode directly in frame</div>
+            </div>
+            <button id="cameraButton" class="submit-btn camera-launch-button"><i class="ti ti-camera"></i><span>Start camera</span></button>
+          </div>
+
+          <!-- Active Scanner State -->
+          <div id="videoFrame" class="video-frame hidden">
+            <div id="reader"></div>
+            <div class="scan-overlay"><div class="scan-line"></div></div>
+          </div>
+        </div>
+
+        <div id="scannerStatus" class="status-text msg-box">Ready. Start camera or enter SN manually.</div>
+
+        <div class="manual-row">
+          <input id="manualSN" class="glass-input" type="text" inputmode="text" autocomplete="off" placeholder="Enter SN manually">
+          <button id="lookupButton" class="primary-button submit-btn"><i class="ti ti-search"></i><span>Lookup</span></button>
+        </div>
+
+        <div class="actions-row">
+          <button id="torchButton" class="ghost-button hidden"><i class="ti ti-bulb"></i><span>Toggle torch</span></button>
+          <button id="stopCameraButton" class="ghost-button hidden"><i class="ti ti-player-stop"></i><span>Stop camera</span></button>
+        </div>
+      </section>
+
+      <section id="resultView" class="panel result-panel glass-card" hidden>
+        <div class="result-header">
+          <div>
+            <p class="eyebrow">Device Details</p>
+            <h2 id="resultSN">-</h2>
+          </div>
+          <button id="copyButton" class="ghost-button"><i class="ti ti-copy"></i><span>Copy SN</span></button>
+        </div>
+        <div id="statusTags" class="status-tags"></div>
+        <div id="detailGroups" class="detail-groups"></div>
+      </section>
+
+      <section class="panel history-panel glass-card">
+        <div class="history-header">
+          <div>
+            <p class="eyebrow">Recent</p>
+            <h2>Scan History</h2>
+          </div>
+          <button id="clearHistoryButton" class="ghost-button"><i class="ti ti-trash"></i><span>Clear</span></button>
+        </div>
+        <div id="historyList" class="history-list empty-state">No recent lookups.</div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // ─── GAS API Configuration ────────────────────────────────────────────────
+    // Paste your GAS Web App /exec URL here.
+    // This file should be opened directly in a browser (local file / GitHub Pages),
+    // NOT served through GAS HtmlService, to allow camera access.
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyJ5TvC_r4PCb0g0xuWeAlRfTS0xy9Ojoe0ngtfNBdHwrFVfoa11cu1JviA55a3OCtC0A/exec';
+
+    /**
+     * JSONP helper — avoids CORS and works from any origin (file://, GitHub Pages, etc.)
+     * GAS Code.gs already supports ?action=...&callback=... via buildApiOutput_()
+     */
+    function jsonpFetch(action, params) {
+      return new Promise((resolve, reject) => {
+        const cbName = '_cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        let done = false;
+        const cleanup = () => { done = true; delete window[cbName]; if (script.parentNode) script.remove(); };
+        const timer = setTimeout(() => { cleanup(); reject(new Error('Request timed out.')); }, 20000);
+        window[cbName] = (resp) => {
+          clearTimeout(timer);
+          cleanup();
+          if (resp && resp.ok) resolve(resp.data);
+          else reject(new Error((resp && resp.error) || 'API error'));
+        };
+        const qs = new URLSearchParams(Object.assign({}, params, { action: action, callback: cbName }));
+        const script = document.createElement('script');
+        script.src = GAS_API_URL + '?' + qs.toString();
+        script.onerror = () => { if (!done) { clearTimeout(timer); cleanup(); reject(new Error('Network error or JSONP blocked.')); } };
+        document.head.appendChild(script);
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const FIELD_GROUPS = [
+      { title: 'Basic', subtitle: 'Identity and product family', icon: 'ti-package', accent: 'glass-accent-green', fields: ['ID', 'Material Type', 'Category', 'Year/Cycle', 'Series'] },
+      { title: 'Product', subtitle: 'Build and platform mapping', icon: 'ti-cpu', accent: 'glass-accent-purple', fields: ['ODM', 'Platform', 'Market Name', 'HW Phase', 'SKU', 'Code Name', 'HW Details'] },
+      { title: 'Location', subtitle: 'Warehouse and intake trace', icon: 'ti-map-pin', accent: 'glass-accent-green', fields: ['Location', 'Storage/Rack', 'Check-in Date', 'Entry Admin'] },
+      { title: 'Usage', subtitle: 'Status, owner and schedule', icon: 'ti-user-share', accent: 'glass-accent-amber', fields: ['IUR Status', 'Transfer Status', 'Current Owner', 'Core Team', 'Start Date', 'Due Date'] },
+      { title: 'Shipping', subtitle: 'Logistics identifiers', icon: 'ti-truck-delivery', accent: 'glass-accent-purple', fields: ['PN', 'Tracking No', 'AWB#'] },
+      { title: 'Notes', subtitle: 'Comments and audit history', icon: 'ti-notes', accent: 'glass-accent-amber', fields: ['Remark/Comment', 'Audit Date', 'History'] }
+    ];
+
+    const state = {
+      bootstrap: null,
+      lastRecord: null,
+      html5QrCode: null,
+      isStartingCamera: false,
+      isLookingUp: false,
+      stream: null
+    };
+
+    document.addEventListener('DOMContentLoaded', init);
+
+    function init() {
+      document.getElementById('lookupButton').addEventListener('click', lookupFromInput);
+      document.getElementById('cameraButton').addEventListener('click', startCamera);
+      document.getElementById('stopCameraButton').addEventListener('click', stopCamera);
+      document.getElementById('resetButton').addEventListener('click', resetScanner);
+      document.getElementById('copyButton').addEventListener('click', copyCurrentSN);
+      document.getElementById('clearHistoryButton').addEventListener('click', clearHistory);
+      document.getElementById('torchButton').addEventListener('click', toggleTorch);
+      document.getElementById('manualSN').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookupFromInput(); });
+
+      jsonpFetch('bootstrap')
+        .then(b => { state.bootstrap = b; renderHistory(); setStatus(buildReadyMessage(b)); })
+        .catch(err => setStatus(err.message || 'Error loading state.'));
+    }
+
+    async function startCamera() {
+      if (state.isStartingCamera || state.stream) return;
+      state.isStartingCamera = true;
+      resetCameraLauncher();
+      setStatus('Requesting camera permission...');
+
+      try {
+        if (!state.html5QrCode) {
+          state.html5QrCode = new Html5Qrcode('reader', {
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.QR_CODE,
+              Html5QrcodeSupportedFormats.CODE_39,
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.DATA_MATRIX
+            ]
+          });
+        }
+
+        await state.html5QrCode.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: (vw) => ({ width: Math.min(vw * 0.8, 300), height: 150 }) },
+          (text) => {
+            if (isValidSN(text)) {
+              const sn = normalizeSN(text);
+              document.getElementById('manualSN').value = sn;
+              stopCamera();
+              lookupBySN(sn);
+            }
+          }
+        );
+
+        // Only update UI *after* camera has successfully started
+        state.isStartingCamera = false;
+        state.stream = true;
+        syncCameraUI(true);
+        setStatus('Camera active. Point at QR code or barcode.');
+        checkTorch();
+      } catch (err) {
+        state.isStartingCamera = false;
+        state.stream = false;
+        // Do NOT call syncCameraUI(true) — stay on launcher
+        const errStr = String(err && (err.name || err.message) || err);
+        if (/NotAllowedError|Permission denied|PermissionDenied/i.test(errStr)) {
+          showCameraPermError();
+        } else if (/NotFoundError|DevicesNotFound/i.test(errStr)) {
+          setStatus('No camera found on this device.');
+        } else if (/NotReadableError|TrackStart/i.test(errStr)) {
+          setStatus('Camera is in use by another app. Close it and retry.');
+        } else {
+          setStatus('Camera error: ' + errStr);
+        }
+      }
+    }
+
+    function resetCameraLauncher() {
+      const icon = document.getElementById('cameraLauncherIcon');
+      if (icon) { icon.innerHTML = '<i class="ti ti-camera-search"></i>'; icon.style.cssText = ''; }
+      const title = document.getElementById('cameraLauncherTitle');
+      if (title) title.textContent = 'Live scanner';
+      const sub = document.getElementById('cameraLauncherSubtitle');
+      if (sub) sub.textContent = 'Scan QR code or barcode directly in frame';
+      const btn = document.getElementById('cameraButton');
+      if (btn) btn.innerHTML = '<i class="ti ti-camera"></i><span>Start camera</span>';
+    }
+
+    function showCameraPermError() {
+      const icon = document.getElementById('cameraLauncherIcon');
+      if (icon) {
+        icon.innerHTML = '<i class="ti ti-camera-off"></i>';
+        icon.style.background = 'rgba(239,68,68,.16)';
+        icon.style.borderColor = 'rgba(239,68,68,.35)';
+        icon.style.color = '#f87171';
+      }
+      const title = document.getElementById('cameraLauncherTitle');
+      if (title) title.textContent = 'Camera blocked';
+      const sub = document.getElementById('cameraLauncherSubtitle');
+      if (sub) sub.textContent = 'Open this URL in Chrome or Safari \u2192 tap the address bar lock icon \u2192 Site settings \u2192 Camera \u2192 Allow (for script.googleusercontent.com). Then tap Retry.';
+      const btn = document.getElementById('cameraButton');
+      if (btn) btn.innerHTML = '<i class="ti ti-refresh"></i><span>Retry</span>';
+      setStatus('[NotAllowedError] Camera permission denied. Allow camera for this URL in browser site settings, then tap Retry.');
+    }
+
+    async function stopCamera() {
+      if (state.html5QrCode) {
+        try {
+          if (state.html5QrCode.isScanning) {
+            await state.html5QrCode.stop();
+            state.html5QrCode.clear();
+          }
+        } catch (e) {}
+      }
+      state.stream = false;
+      state.isStartingCamera = false;
+      syncCameraUI(false);
+      setStatus(buildReadyMessage(state.bootstrap));
+    }
+
+    function syncCameraUI(active) {
+      const shell = document.getElementById('cameraShell');
+      const launcher = document.getElementById('cameraLauncher');
+      const frame = document.getElementById('videoFrame');
+      const stopBtn = document.getElementById('stopCameraButton');
+      const torchBtn = document.getElementById('torchButton');
+
+      if (active) {
+        shell.classList.remove('idle');
+        shell.classList.add('active');
+        launcher.classList.add('hidden');
+        frame.classList.remove('hidden');
+        stopBtn.classList.remove('hidden');
+      } else {
+        shell.classList.remove('active');
+        shell.classList.add('idle');
+        launcher.classList.remove('hidden');
+        frame.classList.add('hidden');
+        stopBtn.classList.add('hidden');
+        torchBtn.classList.add('hidden');
+      }
+    }
+
+    async function checkTorch() {
+      try {
+        const track = state.html5QrCode._scanner.videoElement.srcObject.getVideoTracks()[0];
+        const caps = track.getCapabilities();
+        if (caps.torch) document.getElementById('torchButton').classList.remove('hidden');
+      } catch (e) {}
+    }
+
+    async function toggleTorch() {
+      try {
+        const track = state.html5QrCode._scanner.videoElement.srcObject.getVideoTracks()[0];
+        const enabled = !track.getConstraints().advanced?.[0]?.torch;
+        await track.applyConstraints({ advanced: [{ torch: enabled }] });
+        document.getElementById('torchButton').querySelector('span').textContent = enabled ? 'Torch on' : 'Torch off';
+      } catch (e) {}
+    }
+
+    function lookupFromInput() {
+      const sn = document.getElementById('manualSN').value;
+      if (isValidSN(sn)) lookupBySN(sn);
+      else setStatus('Invalid SN format.');
+    }
+
+    function lookupBySN(sn) {
+      const nSn = normalizeSN(sn);
+      state.isLookingUp = true;
+      setStatus('Looking up ' + nSn + '...');
+      jsonpFetch('lookup', { sn: nSn })
+        .then(record => {
+          state.isLookingUp = false;
+          if (!record) { setStatus('No record found for ' + nSn); return; }
+          state.lastRecord = record;
+          renderRecord(record);
+          addHistoryItem(record);
+          setStatus('Record loaded.');
+        })
+        .catch(err => { state.isLookingUp = false; setStatus(err.message || 'Lookup failed.'); });
+    }
+
+    function renderRecord(r) {
+      document.getElementById('resultSN').textContent = r.SN || '-';
+      const container = document.getElementById('statusTags');
+      container.innerHTML = `
+        <span class="status-pill"><strong>IUR</strong> ${escapeHTML(r['IUR Status'])}</span>
+        <span class="status-pill"><strong>Transfer</strong> ${escapeHTML(r['Transfer Status'])}</span>
+        <span class="status-pill"><strong>Location</strong> ${escapeHTML(r.Location)}</span>
+      `;
+      renderDetailGroups(r);
+      document.getElementById('resultView').hidden = false;
+      document.getElementById('scannerView').classList.add('hidden');
+      document.getElementById('resetButton').hidden = false;
+    }
+
+    function renderDetailGroups(r) {
+      const container = document.getElementById('detailGroups');
+      let html = `<section class="detail-summary-card">
+        ${buildTile('Status', r['IUR Status'], r['Transfer Status'], 'glass-accent-green')}
+        ${buildTile('Owner', r['Current Owner'], r['Core Team'], 'glass-accent-purple')}
+        ${buildTile('Warehouse', r.Location, r['Storage/Rack'], 'glass-accent-amber')}
+      </section>`;
+
+      html += FIELD_GROUPS.map((g, i) => {
+        const rows = g.fields.map(f => `
+          <div class="detail-row">
+            <div class="detail-label">${escapeHTML(f)}</div>
+            <div class="detail-value ${f === 'History' ? 'pre-wrap' : ''}">${escapeHTML(r[f] || '-')}</div>
+          </div>
+        `).join('');
+        return `<section class="rec-card ${i === 0 ? 'open' : ''}">
+          <div class="rec-head" onclick="this.parentElement.classList.toggle('open')">
+            <div class="rec-icon ${g.accent}"><i class="ti ${g.icon}"></i></div>
+            <div class="rec-meta"><div class="rec-title">${g.title}</div><div class="rec-subtitle">${g.subtitle}</div></div>
+            <i class="ti ti-chevron-down rec-chevron"></i>
+          </div>
+          <div class="rec-body"><div class="rec-body-inner"><div class="detail-card">${rows}</div></div></div>
+        </section>`;
+      }).join('');
+      container.innerHTML = html;
+    }
+
+    function buildTile(l, v, sv, a) {
+      return `<div class="summary-tile glass-card-light ${a}"><div class="summary-label">${l}</div><div class="summary-value">${escapeHTML(v || '-')}</div><div class="summary-subvalue">${escapeHTML(sv || '-')}</div></div>`;
+    }
+
+    function addHistoryItem(r) {
+      let h = JSON.parse(sessionStorage.getItem('h') || '[]');
+      h.unshift({ sn: r.SN, title: r['Market Name'] || r.ID || 'Unknown', t: new Date().toISOString() });
+      sessionStorage.setItem('h', JSON.stringify(h.slice(0, 10)));
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const h = JSON.parse(sessionStorage.getItem('h') || '[]');
+      const container = document.getElementById('historyList');
+      if (!h.length) { container.innerHTML = 'No recent lookups.'; return; }
+      container.innerHTML = h.map(item => `
+        <div class="history-item">
+          <div class="history-item-head"><div class="history-sn">${escapeHTML(item.sn)}</div><div class="history-time">${new Date(item.t).toLocaleString()}</div></div>
+          <button class="ghost-button" onclick="document.getElementById('manualSN').value='${item.sn}'; lookupFromInput();">Reuse</button>
+        </div>
+      `).join('');
+    }
+
+    function clearHistory() { sessionStorage.removeItem('h'); renderHistory(); }
+    function resetScanner() { document.getElementById('resultView').hidden = true; document.getElementById('scannerView').classList.remove('hidden'); document.getElementById('resetButton').hidden = true; }
+    function setStatus(m) { document.getElementById('scannerStatus').textContent = m; }
+    function isValidSN(s) { return /^[A-Z0-9]{6,20}$/i.test(normalizeSN(s)); }
+    function normalizeSN(s) { return String(s || '').trim().toUpperCase(); }
+    function escapeHTML(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function buildReadyMessage(b) { return b?.spreadsheetConfigured ? 'Ready to lookup.' : 'Spreadsheet not configured.'; }
+  </script>
+</body>
+</html>
+
