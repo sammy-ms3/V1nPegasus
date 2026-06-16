@@ -204,6 +204,19 @@
     .hidden { display: none !important; }
     @media (min-width: 640px) { .actions-row { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 420px) { .detail-summary-card { grid-template-columns: 1fr; } }
+
+    /* ── NFC auto-detected banner ─────────────────────────────────── */
+    .nfc-banner {
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      border-radius: 14px; background: rgba(163,217,93,.12);
+      border: 1px solid rgba(163,217,93,.30); border-top-color: rgba(163,217,93,.45);
+      margin-bottom: 14px; animation: nfcFadeIn .4s ease;
+    }
+    @keyframes nfcFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .nfc-banner-icon { font-size: 22px; color: var(--accent-light); flex-shrink: 0; }
+    .nfc-banner-copy { flex: 1; min-width: 0; }
+    .nfc-banner-title { font-size: 13px; font-weight: 700; color: var(--accent-light); margin-bottom: 2px; }
+    .nfc-banner-sub { font-size: 12px; color: var(--t2); line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -224,6 +237,15 @@
             <h2>Start scan or enter SN</h2>
           </div>
           <span class="badge b-card"><i class="ti ti-scan"></i> SN lookup</span>
+        </div>
+
+        <!-- NFC Background / Shortcut auto-lookup banner -->
+        <div id="nfcBanner" class="nfc-banner hidden">
+          <i class="ti ti-nfc nfc-banner-icon"></i>
+          <div class="nfc-banner-copy">
+            <div class="nfc-banner-title">NFC Tag Detected</div>
+            <div class="nfc-banner-sub">Auto-searching SN from NFC tag…</div>
+          </div>
         </div>
 
         <div id="cameraShell" class="camera-shell idle">
@@ -349,6 +371,23 @@
       document.getElementById('clearHistoryButton').addEventListener('click', clearHistory);
       document.getElementById('torchButton').addEventListener('click', toggleTorch);
       document.getElementById('manualSN').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookupFromInput(); });
+
+      // ── NFC Background Reading & iOS Shortcut auto-lookup ────────────
+      // When an NFC tag contains a URL (?sn=XXX) or the iOS Shortcut passes
+      // the SN via URL parameter, auto-fill and trigger the lookup instantly.
+      const _up = new URLSearchParams(window.location.search);
+      const _snParam = _up.get('sn');
+      if (_snParam) {
+        const _sn = extractSN(_snParam) || normalizeSN(_snParam);
+        if (_sn) {
+          document.getElementById('manualSN').value = _sn;
+          if (_up.get('source') === 'nfc') showNfcBanner();
+          // Clean the URL bar so a page refresh doesn't re-trigger the lookup
+          if (history.replaceState) history.replaceState(null, '', window.location.pathname);
+          setTimeout(() => lookupBySN(_sn), 50);
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────
 
       apiFetch('bootstrap')
         .then(b => { state.bootstrap = b; renderHistory(); setStatus(buildReadyMessage(b)); })
@@ -638,7 +677,17 @@
     }
 
     function clearHistory() { sessionStorage.removeItem('h'); renderHistory(); }
-    function resetScanner() { document.getElementById('resultView').hidden = true; document.getElementById('scannerView').classList.remove('hidden'); document.getElementById('resetButton').hidden = true; }
+    function resetScanner() {
+      document.getElementById('resultView').hidden = true;
+      document.getElementById('scannerView').classList.remove('hidden');
+      document.getElementById('resetButton').hidden = true;
+      const nb = document.getElementById('nfcBanner');
+      if (nb) nb.classList.add('hidden');
+    }
+    function showNfcBanner() {
+      const el = document.getElementById('nfcBanner');
+      if (el) el.classList.remove('hidden');
+    }
     function setStatus(m) { document.getElementById('scannerStatus').textContent = m; }
     function isValidSN(s)   { return /^[A-Z0-9]{6,20}$/.test(normalizeSN(s)); }
     function normalizeSN(s)  { return String(s || '').trim().toUpperCase(); }
@@ -660,6 +709,11 @@
     function escapeHTML(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     function buildReadyMessage(b) { return b?.spreadsheetConfigured ? 'Ready. Start camera or enter SN manually.' : 'Warning: Spreadsheet not configured in GAS.'; }
   </script>
+  <footer style="text-align: center; padding: 20px 16px 40px; margin-top: 20px;">
+    <p style="font-size: 11px; color: var(--t3); letter-spacing: 0.5px; backdrop-filter: blur(4px); display: inline-block; padding: 6px 12px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+      Copyright &copy; 2026-2027 IUR LAB 米米米 All Rights Reserved
+    </p>
+  </footer>
 </body>
 </html>
 
